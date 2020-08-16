@@ -45,12 +45,11 @@ prog_stdin="$tmpd/1"
 pid=""
 
 mkfifo "$prog_stdin"
-# "$@" <"$prog_stdin" >"$out" & pid=$!
 { "$@" <"$prog_stdin" | tee $(echo "$out") > /dev/null; } & pid=$!
 
 trap "$(cat <<EOF
     rm -fr "$tmpd"
-    if [ -z "$pid" ]; then wait "$pid"; fi
+    if [ ! -z "$pid" ]; then wait "$pid"; fi
 EOF
 )" EXIT
 
