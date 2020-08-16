@@ -1,0 +1,57 @@
+#!/bin/sh -eufo pipefail
+
+THIS_NAME=$(basename "$0")
+
+show_usage() {
+    >&2 cat <<-EOF
+USAGE:
+
+    $THIS_NAME [-o out] ... -- [prog ...]
+
+Pipe stdin to stdout as-is, while teeing stdin to "prog ..." and piping
+prog's stdout to one or more \`out's. 
+
+-o      Specifies the output file that the prog's stdout should be written to.
+        Multiple -o can be specified.
+
+Visually:
+
+        STDIN --> STDOUT
+          |
+          v
+         prog 
+          |
+          v
+     out1, out2, ...
+
+EOF
+}
+
+# ---- BEGIN: Parse args ----
+out=""
+while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
+    arg="$1" && shift
+    case "$arg" in
+        -o) out="$out\n$1" && shift ;;
+        --help) show_usage && exit 0 ;;
+    esac
+done
+[ "$#" == 0 ] && show_usage && exit -1
+shift # shift out '--'
+# ---- END: Parse args ----
+
+tmpd=`mktemp -d`
+prog_stdin="$tmpd/1"
+pid=""
+
+mkfifo "$prog_stdin"
+# "$@" <"$prog_stdin" >"$out" & pid=$!
+{ "$@" <"$prog_stdin" | tee $(echo "$out") > /dev/null; } & pid=$!
+
+trap "$(cat <<EOF
+    rm -fr "$tmpd"
+    if [ -z "$pid" ]; then wait "$pid"; fi
+EOF
+)" EXIT
+
+tee "$prog_stdin"
